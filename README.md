@@ -4,7 +4,11 @@ A lightweight web tool that reads a SEG-Y seismic file, classifies the data, wor
 
 Built for **Australian and Papua New Guinea** datasets.
 
-![SEG-Y Viewer screenshot](docs/screenshot.png)
+![File info, classification and EBCDIC metadata](docs/screenshot-overview.png)
+*File info, data-type classification and EBCDIC metadata for Geoscience Australia line 05GA-BH1.*
+
+![Detected CRS, raw and WGS84 coordinates](docs/screenshot-coordinates.png)
+*Detected source CRS with confidence and evidence, native X/Y, and the WGS84 extent plotted on the map.*
 
 ## Why
 
