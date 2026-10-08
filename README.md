@@ -80,6 +80,15 @@ python server.py
 # open http://localhost:8000
 ```
 
+Drag one of the bundled samples into the page to try it:
+
+| Sample | What it shows |
+|---|---|
+| [`samples/broken_hill_gda94_mga54.sgy`](samples/broken_hill_gda94_mga54.sgy) | Header states `GDA94, MGA ZONE 54` → **EPSG:28354, high confidence** |
+| [`samples/png_gulf_utm55_no_datum.sgy`](samples/png_gulf_utm55_no_datum.sgy) | Header only says `UTM ZONE 55` → region inferred as PNG, **AGD66 / AMG 55 (EPSG:20255), medium confidence**, with WGS84 UTM 55S and PNGMG94 as alternatives. The line was generated in WGS84 UTM 55S, so the default lands ~120 m off. Click the EPSG:32755 alternative to see the line move into place. |
+
+The samples are small synthetic files (≈370 KB each, labelled `SYNTHETIC` in their EBCDIC header). Regenerate them with `python samples/make_samples.py`.
+
 The server listens on `127.0.0.1` only. Set `SEGY_VIEWER_HOST` / `SEGY_VIEWER_PORT` to change this.
 
 Optional: `export ANTHROPIC_API_KEY=...` (and `pip install anthropic`) to extract EBCDIC metadata with Claude Haiku instead of regex. When enabled, the EBCDIC header text is sent to the Anthropic API. CRS detection is always rule-based.
@@ -112,9 +121,17 @@ The test suite generates small synthetic SEG-Y files with segyio, so no external
 - The GDA94/GDA2020 → WGS84 step uses PROJ's default (ballpark) transformation, which is fine for display but accurate to about a metre, not millimetres
 - Coverage is limited to Australia and PNG
 
-## Data
+## Real data
 
-Example data: Geoscience Australia seismic survey L174 (Broken Hill 2005, line 05GA-BH1), publicly available from Geoscience Australia. The data is not included in this repository.
+The screenshots and the ~2.2 km example use a real public dataset that is not included in this repository (≈95 MB):
+
+**L174 Broken Hill 2D Seismic Survey, NSW, 2005: stacked and migrated seismic data and images for lines 05GA-BH1 and 05GA-BH1EXP**
+- Catalogue record: [pid.geoscience.gov.au/dataset/ga/74856](https://pid.geoscience.gov.au/dataset/ga/74856)
+- Download: [L174_Processed_Seismic_Package.zip](https://d28rz98at9flks.cloudfront.net/74856/L174_Processed_Seismic_Package.zip)
+
+© Commonwealth of Australia (Geoscience Australia). Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+After unzipping, drag any `.sgy` from `L174_Processed_Data/` into the viewer.
 
 ## Licence
 

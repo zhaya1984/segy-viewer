@@ -97,3 +97,16 @@ def test_index_is_served(base_url):
     status, body = request(f'{base_url}/')
     assert status == 200
     assert b'epsg-input' in body
+
+
+# ── Bundled sample files ────────────────────────────────────────────────────
+
+@pytest.mark.parametrize('name, epsg, confidence', [
+    ('broken_hill_gda94_mga54.sgy', 28354, 'high'),
+    ('png_gulf_utm55_no_datum.sgy', 20255, 'medium'),
+])
+def test_bundled_samples(name, epsg, confidence):
+    path = server.BASE_DIR / 'samples' / name
+    r = server._parse_and_classify(str(path), name)
+    crs = r['coordinate_info']['source_crs']
+    assert (crs['epsg'], crs['confidence']) == (epsg, confidence)
