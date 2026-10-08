@@ -24,24 +24,32 @@
           <label for="region-select">Region</label>
           <select id="region-select">
             <option value="auto">Auto-detect</option>
-            <option value="australia">Australia GDA94/MGA</option>
-            <option value="china">China CGCS2000</option>
-            <option value="north_sea">North Sea / Europe UTM</option>
-            <option value="north_america">North America UTM</option>
+            <option value="australia">Australia (GDA94 / GDA2020 MGA)</option>
+            <option value="png">Papua New Guinea (AGD66 AMG / WGS84 UTM / PNGMG94)</option>
             <option value="geographic">Geographic (lat/lon)</option>
           </select>
         </div>
         <div class="crs-row">
-          <label for="zone-input">UTM Zone</label>
-          <input id="zone-input" type="number" min="1" max="60" placeholder="Auto">
-          <span class="zone-hint" id="zone-from-ebcdic" style="display:none">
-            from EBCDIC: <strong id="zone-ebcdic-val"></strong>
-          </span>
+          <label for="epsg-input">EPSG</label>
+          <input id="epsg-input" type="text" inputmode="numeric" placeholder="Auto-detect (e.g. 28354)">
+          <button id="epsg-apply" class="btn-mini" type="button" disabled>Apply</button>
         </div>
+        <div class="crs-note">Coverage: Australia &amp; PNG. Region is only used when EBCDIC lacks a datum (auto infers it from position). EPSG overrides detection.</div>
 
         <!-- UTM Zone Reference Table -->
         <details id="zone-ref">
-          <summary>UTM Zone Reference</summary>
+          <summary>UTM Zone / EPSG Reference</summary>
+          <table class="zone-table">
+            <thead><tr><th>CRS family</th><th>EPSG</th></tr></thead>
+            <tbody>
+              <tr><td>GDA2020 / MGA zone z (AU)</td><td>78zz</td></tr>
+              <tr><td>GDA94 / MGA zone z (AU)</td><td>283zz</td></tr>
+              <tr><td>AGD84 / AMG zone z (AU)</td><td>203zz</td></tr>
+              <tr><td>AGD66 / AMG zone z (AU, PNG 54–56)</td><td>202zz</td></tr>
+              <tr><td>PNG94 / PNGMG94 zone 54 · 55 · 56 · 57</td><td>5550 · 5551 · 5552 · 9874</td></tr>
+              <tr><td>WGS84 / UTM zone zS</td><td>327zz</td></tr>
+            </tbody>
+          </table>
           <table class="zone-table">
             <thead>
               <tr><th>Region</th><th>Zone(s)</th><th>Central Meridian</th></tr>
@@ -54,20 +62,10 @@
               <tr><td>VIC / NSW (west)</td><td>54</td><td>141°E</td></tr>
               <tr><td>NSW (east) / QLD (south)</td><td>55</td><td>147°E</td></tr>
               <tr><td>QLD (north)</td><td>55–56</td><td>147°E – 153°E</td></tr>
-              <tr class="group-header"><td colspan="3">China</td></tr>
-              <tr><td>Xinjiang / Tibet (west)</td><td>43–44</td><td>75°E – 81°E</td></tr>
-              <tr><td>Northwest China</td><td>45–46</td><td>87°E – 93°E</td></tr>
-              <tr><td>Central China</td><td>47–49</td><td>99°E – 111°E</td></tr>
-              <tr><td>East China</td><td>50–51</td><td>117°E – 123°E</td></tr>
-              <tr class="group-header"><td colspan="3">North Sea / Europe</td></tr>
-              <tr><td>UK / Ireland</td><td>29–30</td><td>9°W – 3°W</td></tr>
-              <tr><td>North Sea (central)</td><td>31–32</td><td>3°E – 9°E</td></tr>
-              <tr><td>Norway / Netherlands</td><td>32–33</td><td>9°E – 15°E</td></tr>
-              <tr class="group-header"><td colspan="3">North America</td></tr>
-              <tr><td>US / Canada (west)</td><td>10–11</td><td>123°W – 117°W</td></tr>
-              <tr><td>US (central)</td><td>13–15</td><td>105°W – 93°W</td></tr>
-              <tr><td>US / Canada (east)</td><td>17–19</td><td>81°W – 69°W</td></tr>
-              <tr><td>Gulf of Mexico</td><td>14–16</td><td>99°W – 87°W</td></tr>
+              <tr class="group-header"><td colspan="3">Papua New Guinea</td></tr>
+              <tr><td>Western Province (west of 144°E)</td><td>54</td><td>141°E</td></tr>
+              <tr><td>Highlands / Gulf / Southern</td><td>55</td><td>147°E</td></tr>
+              <tr><td>New Britain / New Ireland / Bougainville</td><td>56</td><td>153°E</td></tr>
             </tbody>
           </table>
         </details>
@@ -115,6 +113,7 @@
 
         <div class="section">
           <div class="section-title">Coordinates</div>
+          <div id="crs-summary"></div>
           <table class="info-table" id="coord-table"></table>
         </div>
 

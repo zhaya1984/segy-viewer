@@ -21,6 +21,16 @@ const errorBox      = document.getElementById('error-box');
 const resultPanel   = document.getElementById('result-panel');
 const mapEmpty      = document.getElementById('map-empty');
 const mapLegend     = document.getElementById('map-legend');
+const epsgInput     = document.getElementById('epsg-input');
+const epsgApply     = document.getElementById('epsg-apply');
+
+// Last uploaded file, re-parsed when the EPSG or region is changed
+let lastFile = null;
+
+epsgApply.addEventListener('click', () => { if (lastFile) uploadFile(lastFile); });
+epsgInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && lastFile) uploadFile(lastFile);
+});
 
 // ── Drag & drop ───────────────────────────────────────────────
 uploadZone.addEventListener('dragover', e => {
@@ -47,19 +57,23 @@ function uploadFile(file) {
     return;
   }
 
+  if (file !== lastFile) epsgInput.value = '';  // new file: back to auto-detect
+  lastFile = file;
+  epsgApply.disabled = false;
+
   hideError();
   hideResult();
   showProgress(5, `Uploading: ${file.name}`);
 
   const region  = document.getElementById('region-select').value;
-  const zoneVal = document.getElementById('zone-input').value.trim();
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('region', region);
-  if (zoneVal) formData.append('zone', zoneVal);
+  const epsgVal = epsgInput.value.trim();
+  const params = new URLSearchParams({ filename: file.name, region });
+  if (epsgVal) params.set('epsg', epsgVal);
 
+  // The file is sent as the raw request body so the server can stream it to disk
   const xhr = new XMLHttpRequest();
-  xhr.open('POST', '/api/upload');
+  xhr.open('POST', `/api/upload?${params}`);
+  xhr.setRequestHeader('Content-Type', 'application/octet-stream');
 
   xhr.upload.onprogress = e => {
     if (e.lengthComputable) {
@@ -87,7 +101,7 @@ function uploadFile(file) {
   xhr.onerror   = () => { hideProgress(); showError('Network error — is the server running?'); };
   xhr.ontimeout = () => { hideProgress(); showError('Request timed out'); };
   xhr.timeout   = 300_000;
-  xhr.send(formData);
+  xhr.send(file);
 }
 
 // ── Render results ────────────────────────────────────────────
@@ -131,27 +145,17 @@ function renderResult(data) {
   renderTable('ebcdic-table', kwRows.length > 0 ? kwRows : [['(No structured keywords found)', '']]);
   document.getElementById('ebcdic-raw').textContent = data.ebcdic.raw_text || '';
 
-  // Show EBCDIC-detected zone
-  const ebcdicZone = cls.utm_zone_from_ebcdic;
-  const zoneHintEl = document.getElementById('zone-from-ebcdic');
-  if (ebcdicZone) {
-    document.getElementById('zone-ebcdic-val').textContent = `Zone ${ebcdicZone}`;
-    zoneHintEl.style.display = 'inline';
-    if (!document.getElementById('zone-input').value)
-      document.getElementById('zone-input').value = ebcdicZone;
-  } else {
-    zoneHintEl.style.display = 'none';
-  }
-
   // Coordinates
   const ci = data.coordinate_info;
   const bb = ci.bbox;
   const xy = ci.raw_xy || {};
+  renderCrsSummary(ci.source_crs);
+  const srcCrs = ci.source_crs;
   const coordRows = [
     ['Source field', ci.coord_source],
     ['Scalar',       ci.scalar],
-    ['CRS',          ci.crs_guess + (ci.utm_zone ? ` (Zone ${ci.utm_zone})` : '')],
-    ['WGS84',        ci.wgs84_converted ? 'Converted (approx.)' : 'Already geographic'],
+    ['Units (byte 89)', COORD_UNITS[ci.coord_unit] || `Code ${ci.coord_unit}`],
+    ['Transform',    srcCrs.epsg ? `EPSG:${srcCrs.epsg} → EPSG:${ci.target_crs.epsg} (pyproj)` : 'Not transformed'],
     ['─── Raw X / Y ───', ''],
     ['X range',  xy.x_min != null ? `${fmtCoord(xy.x_min)} → ${fmtCoord(xy.x_max)}` : '—'],
     ['Y range',  xy.y_min != null ? `${fmtCoord(xy.y_min)} → ${fmtCoord(xy.y_max)}` : '—'],
@@ -159,9 +163,9 @@ function renderResult(data) {
     ['Y start',  xy.y_first != null ? fmtCoord(xy.y_first) : '—'],
     ['X end',    xy.x_last  != null ? fmtCoord(xy.x_last)  : '—'],
     ['Y end',    xy.y_last  != null ? fmtCoord(xy.y_last)  : '—'],
-    ['─── Geographic ───', ''],
-    ['Longitude', bb.min_lon !== 0 ? `${bb.min_lon.toFixed(4)}° to ${bb.max_lon.toFixed(4)}°` : 'Invalid'],
-    ['Latitude',  bb.min_lat !== 0 ? `${bb.min_lat.toFixed(4)}° to ${bb.max_lat.toFixed(4)}°` : 'Invalid'],
+    ['─── WGS84 (EPSG:4326) ───', ''],
+    ['Longitude', bb.min_lon !== 0 ? `${bb.min_lon.toFixed(5)}° to ${bb.max_lon.toFixed(5)}°` : 'Invalid'],
+    ['Latitude',  bb.min_lat !== 0 ? `${bb.min_lat.toFixed(5)}° to ${bb.max_lat.toFixed(5)}°` : 'Invalid'],
   ];
   renderTable('coord-table', coordRows);
 
@@ -174,13 +178,13 @@ function renderResult(data) {
   ]);
 
   showResult();
-  renderMap(data.geojson, ci.bbox);
+  renderMap(data.geojson, ci.bbox, srcCrs.epsg != null);
   showProgress(100, 'Complete');
   setTimeout(hideProgress, 300);
 }
 
 // ── Map rendering ─────────────────────────────────────────────
-function renderMap(geojson, bbox) {
+function renderMap(geojson, bbox, crsKnown = true) {
   if (traceLayer) { map.removeLayer(traceLayer); traceLayer = null; }
   if (bboxLayer)  { map.removeLayer(bboxLayer);  bboxLayer  = null; }
 
@@ -189,8 +193,10 @@ function renderMap(geojson, bbox) {
 
   if (points.length === 0 && polygons.length === 0) {
     mapEmpty.style.display = 'flex';
-    mapEmpty.querySelector('.empty-text').textContent =
-      'Coordinates are invalid or all zero — cannot display location';
+    mapLegend.style.display = 'none';
+    mapEmpty.querySelector('.empty-text').textContent = crsKnown
+      ? 'Coordinates are invalid or all zero — cannot display location'
+      : 'Source CRS could not be determined — enter an EPSG code and click Apply';
     return;
   }
 
@@ -235,6 +241,38 @@ function renderMap(geojson, bbox) {
 
   mapEmpty.style.display = 'none';
   mapLegend.style.display = 'flex';
+}
+
+// ── Source CRS summary ────────────────────────────────────────
+function renderCrsSummary(crs) {
+  const el = document.getElementById('crs-summary');
+  const conf = CONFIDENCE[crs.confidence] || CONFIDENCE.none;
+  const head = crs.epsg
+    ? `<span class="crs-epsg">EPSG:${crs.epsg}</span>`
+    : `<span class="crs-epsg">Source CRS unknown</span>`;
+  const evidence = crs.evidence.map(e => `<li>${escapeHtml(e)}</li>`).join('');
+  el.innerHTML = `
+    <div class="crs-head">${head}<span class="badge ${conf.cls}">${conf.label}</span></div>
+    ${crs.name ? `<div class="crs-name">${escapeHtml(crs.name)}</div>` : ''}
+    <ul class="crs-evidence">${evidence}</ul>`;
+
+  if (crs.alternatives.length > 0) {
+    const alts = document.createElement('div');
+    alts.className = 'crs-alts';
+    alts.append('Alternatives:');
+    crs.alternatives.forEach(a => {
+      const btn = document.createElement('button');
+      btn.className = 'btn-mini';
+      btn.textContent = `EPSG:${a.epsg}`;
+      btn.title = a.name + (a.in_area === false ? ' (outside area of use)' : '');
+      btn.addEventListener('click', () => {
+        epsgInput.value = a.epsg;
+        uploadFile(lastFile);
+      });
+      alts.appendChild(btn);
+    });
+    el.appendChild(alts);
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -297,3 +335,25 @@ const KW_LABELS = {
   line_name:  'Line no.',
   contractor: 'Acquired by',
 };
+
+const CONFIDENCE = {
+  user:   { label: 'User specified',  cls: 'badge-blue' },
+  high:   { label: 'High confidence', cls: 'badge-green' },
+  medium: { label: 'Medium confidence', cls: 'badge-orange' },
+  low:    { label: 'Low confidence — please verify', cls: 'badge-red' },
+  none:   { label: 'Not detected', cls: 'badge-red' },
+};
+
+const COORD_UNITS = {
+  0: 'Not set',
+  1: 'Length (m / ft)',
+  2: 'Seconds of arc',
+  3: 'Decimal degrees',
+  4: 'DMS',
+};
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[c]);
+}

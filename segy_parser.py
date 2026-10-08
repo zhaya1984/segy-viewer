@@ -1,4 +1,4 @@
-"""segy_parser.py - SEG-Y 文件解析核心模块"""
+"""segy_parser.py - SEG-Y header reader"""
 import numpy as np
 import segyio
 
@@ -22,19 +22,19 @@ DATA_FORMAT_NAMES = {
 
 def parse_segy_file(filepath: str, max_traces: int = 1000) -> dict:
     """
-    解析 SEG-Y 文件，返回 EBCDIC 头、二进制头、道头数组。
-    使用 ignore_geometry=True 安全打开任意非标 SEG-Y 文件。
-    对大文件均匀抽样以提升性能。
+    Read a SEG-Y file and return the EBCDIC header, binary header and trace-header arrays.
+    Opens with ignore_geometry=True so non-standard files can be read safely.
+    Large files are uniformly sampled for speed.
     """
     with segyio.open(filepath, mode='r', ignore_geometry=True) as f:
 
-        # --- EBCDIC 文本头 ---
+        # --- EBCDIC textual header ---
         try:
             ebcdic_raw = segyio.tools.wrap(f.text[0])
         except Exception:
             ebcdic_raw = str(f.text[0])
 
-        # --- 二进制头 ---
+        # --- Binary header ---
         bin_hdr = f.bin
         sample_interval  = int(bin_hdr[segyio.BinField.Interval])
         samples_per_trace = int(bin_hdr[segyio.BinField.Samples])
@@ -46,13 +46,13 @@ def parse_segy_file(filepath: str, max_traces: int = 1000) -> dict:
 
         total_traces = f.tracecount
 
-        # --- 道头抽样 ---
+        # --- Trace-header sampling ---
         if total_traces <= max_traces:
             indices = np.arange(total_traces, dtype=np.int32)
         else:
             indices = np.linspace(0, total_traces - 1, max_traces, dtype=np.int32)
 
-        # 批量读取道头字段（C 层实现，比 Python 循环快 100x）
+        # Bulk-read header fields (C implementation, ~100x faster than a Python loop)
         def read_attr(field):
             try:
                 return f.attributes(field)[indices]

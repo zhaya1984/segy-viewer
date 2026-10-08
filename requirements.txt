@@ -1,0 +1,5 @@
+segyio>=1.9
+numpy>=2.2.3
+pyproj>=3.8.0
+# Optional: set ANTHROPIC_API_KEY to extract EBCDIC metadata with Claude
+# anthropic

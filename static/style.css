@@ -1,4 +1,4 @@
-/* ── 全局重置 ─────────────────────────────────────────── */
+/* ── Reset ─────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -10,13 +10,13 @@ body {
   overflow: hidden;
 }
 
-/* ── 布局 ──────────────────────────────────────────────── */
+/* ── Layout ──────────────────────────────────────────────── */
 #app {
   display: flex;
   height: 100vh;
 }
 
-/* ── 左侧面板 ──────────────────────────────────────────── */
+/* ── Sidebar ──────────────────────────────────────────── */
 #sidebar {
   width: 320px;
   min-width: 280px;
@@ -46,7 +46,7 @@ body {
   gap: 12px;
 }
 
-/* ── 坐标系选择 ─────────────────────────────────────────── */
+/* ── CRS controls ─────────────────────────────────────────── */
 .crs-row {
   display: flex;
   align-items: center;
@@ -62,7 +62,7 @@ body {
   letter-spacing: 0.4px;
 }
 
-.crs-row select, .crs-row input[type="number"] {
+.crs-row select, .crs-row input[type="text"] {
   flex: 1;
   background: #151824;
   border: 1px solid #2d3148;
@@ -75,7 +75,7 @@ body {
   min-width: 0;
 }
 
-.crs-row select:focus, .crs-row input[type="number"]:focus {
+.crs-row select:focus, .crs-row input[type="text"]:focus {
   border-color: #7c8cf8;
 }
 
@@ -164,7 +164,7 @@ body {
   border-top: 4px solid #0f1117;
 }
 
-/* ── 上传区域 ──────────────────────────────────────────── */
+/* ── Upload zone ──────────────────────────────────────────── */
 .drop-zone {
   border: 2px dashed #3d4266;
   border-radius: 10px;
@@ -206,7 +206,7 @@ body {
 }
 .btn-upload:hover { background: #6370e8; }
 
-/* ── 进度条 ─────────────────────────────────────────────── */
+/* ── Progress bar ─────────────────────────────────────────────── */
 #progress-wrap {
   background: #151824;
   border-radius: 8px;
@@ -237,7 +237,7 @@ body {
   transition: width 0.2s;
 }
 
-/* ── 错误提示 ────────────────────────────────────────────── */
+/* ── Error box ────────────────────────────────────────────── */
 #error-box {
   background: #2d1a1a;
   border: 1px solid #7f1d1d;
@@ -249,11 +249,11 @@ body {
 }
 #error-box.visible { display: block; }
 
-/* ── 结果面板 ────────────────────────────────────────────── */
+/* ── Result panel ────────────────────────────────────────────── */
 #result-panel { display: none; }
 #result-panel.visible { display: block; }
 
-/* 分类徽章组 */
+/* Classification badges */
 .badges {
   display: flex;
   flex-wrap: wrap;
@@ -280,7 +280,7 @@ body {
 .badge-cyan   { background: #164e63; color: #67e8f9; }
 .badge-gray   { background: #1e293b; color: #94a3b8; }
 
-/* 信息区块 */
+/* Info sections */
 .section {
   background: #151824;
   border-radius: 8px;
@@ -297,7 +297,7 @@ body {
   border-bottom: 1px solid #2d3148;
 }
 
-/* 信息表格 */
+/* Info tables */
 .info-table {
   width: 100%;
   border-collapse: collapse;
@@ -331,7 +331,7 @@ body {
   word-break: break-all;
 }
 
-/* EBCDIC 完整文本 */
+/* Full EBCDIC text */
 details summary {
   cursor: pointer;
   font-size: 11px;
@@ -355,7 +355,7 @@ details summary:hover { color: #a5b4fc; }
   line-height: 1.5;
 }
 
-/* ── 地图区域 ─────────────────────────────────────────────── */
+/* ── Map ─────────────────────────────────────────────── */
 #map-container {
   flex: 1;
   position: relative;
@@ -367,12 +367,12 @@ details summary:hover { color: #a5b4fc; }
   height: 100%;
 }
 
-/* Leaflet 暗色调整 */
+/* Leaflet dark-theme tweaks */
 .leaflet-container {
   background: #1a1d27;
 }
 
-/* 地图图例 */
+/* Map legend */
 #map-legend {
   position: absolute;
   bottom: 28px;
@@ -412,7 +412,7 @@ details summary:hover { color: #a5b4fc; }
   flex-shrink: 0;
 }
 
-/* 空地图提示 */
+/* Empty-map placeholder */
 #map-empty {
   position: absolute;
   inset: 0;
@@ -429,10 +429,38 @@ details summary:hover { color: #a5b4fc; }
 #map-empty .empty-icon { font-size: 48px; }
 #map-empty .empty-text { font-size: 14px; }
 
-/* 滚动条美化 */
+/* Scrollbars */
 #sidebar-body::-webkit-scrollbar { width: 4px; }
 #sidebar-body::-webkit-scrollbar-track { background: transparent; }
 #sidebar-body::-webkit-scrollbar-thumb { background: #2d3148; border-radius: 2px; }
 
 #ebcdic-raw::-webkit-scrollbar { width: 4px; height: 4px; }
 #ebcdic-raw::-webkit-scrollbar-thumb { background: #2d3148; border-radius: 2px; }
+
+/* ── CRS detection ── */
+.crs-note {
+  font-size: 11px;
+  color: #64748b;
+  padding: 4px 12px 8px;
+  border-bottom: 1px solid #1e2236;
+}
+.btn-mini {
+  background: #2d3148;
+  border: 1px solid #3d4266;
+  border-radius: 6px;
+  color: #c7d2fe;
+  font-size: 11px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.btn-mini:disabled { opacity: 0.4; cursor: default; }
+.btn-mini:not(:disabled):hover { border-color: #7c8cf8; }
+#crs-summary { padding: 10px 12px; border-bottom: 1px solid #1e2236; }
+#crs-summary:empty { display: none; }
+.crs-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.crs-epsg { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+.crs-name { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+.crs-evidence { margin: 8px 0 0; padding-left: 16px; font-size: 11px; color: #94a3b8; }
+.crs-evidence li { margin: 2px 0; }
+.crs-alts { margin-top: 8px; font-size: 11px; color: #64748b; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.badge-red { background: #7f1d1d; color: #fca5a5; }

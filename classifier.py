@@ -1,11 +1,11 @@
-"""classifier.py - SEG-Y 文件分类逻辑"""
+"""classifier.py - SEG-Y data-type classification"""
 import re
 import os
 import json
 import numpy as np
 
 
-# ── 时深域关键词 ──────────────────────────────────────────────
+# ── Time / depth domain keywords ────────────────────────────
 DEPTH_KEYWORDS = [
     'depth migrated', 'depth domain', 'psdm', 'kdmig', 'z-domain',
     'depth section', 'depth conversion', 'pre-sdm', 'pre sdm',
@@ -17,7 +17,7 @@ TIME_KEYWORDS = [
     'pre-stm', 'pre stm', 'kirchhoff time', 'rtm time',
 ]
 
-# ── EBCDIC 关键字正则 ──────────────────────────────────────────
+# ── EBCDIC keyword patterns ─────────────────────────────────
 # Rules:
 #  - Longer compound keywords (e.g. "SURVEY NAME") must come BEFORE shorter
 #    ones ("SURVEY") in the alternation so they match first.
@@ -33,7 +33,8 @@ EBCDIC_PATTERNS = {
     'client_for': r'\bFOR\s+([A-Z][A-Z0-9&\-\.]{1,25})(?:\s|$)',
 
     # "AREA : X" / "BASIN : X" etc.
-    'area':       r'(?:area|field|basin|block|region|location)[:\s]+([A-Z][A-Z0-9 \-_]{2,30})',
+    # Requires a colon: bare words like "FIELD" also appear in "FIELD TAPE NOS"
+    'area':       r'(?:area|field|basin|block|region|location)\s*:\s*([A-Z][A-Z0-9 \-_]{2,30})',
 
     # Dates: "DATE RECORDED : AUG 2005", "SEGY TAPE PRODUCED : MARCH 2008"
     'date':       r'(?:date\s+recorded|date\s+acquired|tape\s+produced|produced|acquired|date|vintage)[:\s]+([A-Z]{3,9}\s+\d{4}|\d{4}[-/]\d{1,2}(?:[-/]\d{1,2})?)',
@@ -50,7 +51,7 @@ EBCDIC_PATTERNS = {
 
 def classify(parsed: dict) -> dict:
     """
-    综合分类结果，返回分类字典。
+    Run all classifiers and return a combined result dict.
     """
     ta = parsed['trace_arrays']
     bin_hdr = parsed['bin_hdr']
@@ -61,7 +62,6 @@ def classify(parsed: dict) -> dict:
     domain     = detect_domain(ebcdic, bin_hdr['sample_interval_us'])
     survey_type = detect_survey_type(ebcdic)
     keywords   = extract_ebcdic_keywords_llm(ebcdic)
-    utm_zone   = extract_utm_zone(ebcdic)
 
     return {
         'dimension':   dimension,
@@ -70,7 +70,6 @@ def classify(parsed: dict) -> dict:
         'survey_type': survey_type,
         'data_type':   f"{dimension}_{stack_type}_{domain}",
         'ebcdic_keywords': keywords,
-        'utm_zone_from_ebcdic': utm_zone,
     }
 
 
@@ -134,12 +133,12 @@ def detect_dimension(ilines: np.ndarray, xlines: np.ndarray,
 
 def detect_stack_type(offsets: np.ndarray, tric: np.ndarray) -> str:
     """
-    叠前 vs 叠后：
-    - offset 全为 0 → poststack
-    - 有效道中零值占比 > 95% → poststack
-    - 否则 → prestack
+    Pre-stack vs post-stack:
+    - all offsets zero → poststack
+    - > 95% of live traces have zero offset → poststack
+    - otherwise → prestack
     """
-    valid = offsets[tric != 2]  # 排除 dead trace（TRIC=2）
+    valid = offsets[tric != 2]  # exclude dead traces (TRIC = 2)
     if len(valid) == 0:
         return "poststack"
 
@@ -153,9 +152,9 @@ def detect_stack_type(offsets: np.ndarray, tric: np.ndarray) -> str:
 
 def detect_domain(ebcdic_text: str, sample_interval_us: int) -> str:
     """
-    时间域 vs 深度域：
-    1. EBCDIC 关键词匹配
-    2. 回退：标准地震采样间隔 → 时间域
+    Time vs depth domain:
+    1. EBCDIC keyword matching
+    2. Fallback: standard seismic sample interval → time
     """
     text_lower = ebcdic_text.lower()
 
@@ -167,7 +166,7 @@ def detect_domain(ebcdic_text: str, sample_interval_us: int) -> str:
     if time_score > depth_score:
         return "time"
 
-    # 标准地震采样间隔（微秒）
+    # Standard seismic sample intervals (microseconds)
     if sample_interval_us in {250, 500, 1000, 2000, 4000}:
         return "time"
 
@@ -175,7 +174,7 @@ def detect_domain(ebcdic_text: str, sample_interval_us: int) -> str:
 
 
 def detect_survey_type(ebcdic_text: str) -> str:
-    """海上 vs 陆上 vs 过渡带"""
+    """Marine vs land vs transition zone"""
     text_lower = ebcdic_text.lower()
     if any(kw in text_lower for kw in ['marine', 'offshore', 'ocean bottom', 'obs ', 'streamer', 'obc']):
         return "marine"
@@ -184,28 +183,6 @@ def detect_survey_type(ebcdic_text: str) -> str:
     if any(kw in text_lower for kw in ['transition', 'shallow water', 'swath']):
         return "transition"
     return "unknown"
-
-
-def extract_utm_zone(raw_text: str) -> int | None:
-    """
-    从 EBCDIC 文本中提取 UTM Zone 号。
-    常见格式：MGA54、MGA ZONE 54、UTM ZONE 54N、GDA94/MGA54、ZONE 54
-    """
-    text = raw_text.upper()
-    patterns = [
-        r'MGA\s*(\d{2})',                          # MGA54 / MGA 54
-        r'GDA\s*\d*\s*/\s*MGA\s*(\d{2})',          # GDA94/MGA54
-        r'UTM\s+ZONE\s+(\d{1,2})\s*[NS]?',         # UTM ZONE 54N
-        r'(?<!\d)ZONE\s+(\d{1,2})\s*[NS]?(?!\d)',  # ZONE 54
-        r'MGA\s+ZONE\s+(\d{1,2})',                 # MGA ZONE 54
-    ]
-    for pattern in patterns:
-        m = re.search(pattern, text)
-        if m:
-            zone = int(m.group(1))
-            if 1 <= zone <= 60:
-                return zone
-    return None
 
 
 def extract_ebcdic_keywords(raw_text: str) -> dict:
