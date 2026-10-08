@@ -86,8 +86,9 @@ Drag one of the bundled samples into the page to try it:
 |---|---|
 | [`samples/broken_hill_gda94_mga54.sgy`](samples/broken_hill_gda94_mga54.sgy) | Header states `GDA94, MGA ZONE 54` → **EPSG:28354, high confidence** |
 | [`samples/png_gulf_utm55_no_datum.sgy`](samples/png_gulf_utm55_no_datum.sgy) | Header only says `UTM ZONE 55` → region inferred as PNG, **AGD66 / AMG 55 (EPSG:20255), medium confidence**, with WGS84 UTM 55S and PNGMG94 as alternatives. The line was generated in WGS84 UTM 55S, so the default lands ~120 m off. Click the EPSG:32755 alternative to see the line move into place. |
+| [`samples/cooper_3d_gda2020_mga54.sgy`](samples/cooper_3d_gda2020_mga54.sgy) | Tiny decimated **3D** volume (20 × 20 lines, rotated 30°) in the Cooper Basin. Classified as 3D; header states `GDA2020, MGA ZONE 54` → **EPSG:7854, high confidence**. Hover a point to see its inline/crossline. |
 
-The samples are small synthetic files (≈370 KB each, labelled `SYNTHETIC` in their EBCDIC header). Regenerate them with `python samples/make_samples.py`.
+The samples are small synthetic files (250–370 KB each, labelled `SYNTHETIC` in their EBCDIC header). Regenerate them with `python samples/make_samples.py`.
 
 The server listens on `127.0.0.1` only. Set `SEGY_VIEWER_HOST` / `SEGY_VIEWER_PORT` to change this.
 
