@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SEG-Y Seismic Viewer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── Sidebar ── -->
+  <aside id="sidebar">
+    <h1>SEG-Y Seismic Viewer</h1>
+
+    <div id="sidebar-body">
+
+      <!-- CRS Settings -->
+      <div class="section-group">
+        <div class="section-title">Coordinate System</div>
+        <div class="crs-row">
+          <label for="region-select">Region</label>
+          <select id="region-select">
+            <option value="auto">Auto-detect</option>
+            <option value="australia">Australia GDA94/MGA</option>
+            <option value="china">China CGCS2000</option>
+            <option value="north_sea">North Sea / Europe UTM</option>
+            <option value="north_america">North America UTM</option>
+            <option value="geographic">Geographic (lat/lon)</option>
+          </select>
+        </div>
+        <div class="crs-row">
+          <label for="zone-input">UTM Zone</label>
+          <input id="zone-input" type="number" min="1" max="60" placeholder="Auto">
+          <span class="zone-hint" id="zone-from-ebcdic" style="display:none">
+            from EBCDIC: <strong id="zone-ebcdic-val"></strong>
+          </span>
+        </div>
+
+        <!-- UTM Zone Reference Table -->
+        <details id="zone-ref">
+          <summary>UTM Zone Reference</summary>
+          <table class="zone-table">
+            <thead>
+              <tr><th>Region</th><th>Zone(s)</th><th>Central Meridian</th></tr>
+            </thead>
+            <tbody>
+              <tr class="group-header"><td colspan="3">Australia</td></tr>
+              <tr><td>WA (west)</td><td>49–50</td><td>111°E – 117°E</td></tr>
+              <tr><td>WA (east) / SA (west)</td><td>51–52</td><td>123°E – 129°E</td></tr>
+              <tr><td>SA / NT</td><td>53</td><td>135°E</td></tr>
+              <tr><td>VIC / NSW (west)</td><td>54</td><td>141°E</td></tr>
+              <tr><td>NSW (east) / QLD (south)</td><td>55</td><td>147°E</td></tr>
+              <tr><td>QLD (north)</td><td>55–56</td><td>147°E – 153°E</td></tr>
+              <tr class="group-header"><td colspan="3">China</td></tr>
+              <tr><td>Xinjiang / Tibet (west)</td><td>43–44</td><td>75°E – 81°E</td></tr>
+              <tr><td>Northwest China</td><td>45–46</td><td>87°E – 93°E</td></tr>
+              <tr><td>Central China</td><td>47–49</td><td>99°E – 111°E</td></tr>
+              <tr><td>East China</td><td>50–51</td><td>117°E – 123°E</td></tr>
+              <tr class="group-header"><td colspan="3">North Sea / Europe</td></tr>
+              <tr><td>UK / Ireland</td><td>29–30</td><td>9°W – 3°W</td></tr>
+              <tr><td>North Sea (central)</td><td>31–32</td><td>3°E – 9°E</td></tr>
+              <tr><td>Norway / Netherlands</td><td>32–33</td><td>9°E – 15°E</td></tr>
+              <tr class="group-header"><td colspan="3">North America</td></tr>
+              <tr><td>US / Canada (west)</td><td>10–11</td><td>123°W – 117°W</td></tr>
+              <tr><td>US (central)</td><td>13–15</td><td>105°W – 93°W</td></tr>
+              <tr><td>US / Canada (east)</td><td>17–19</td><td>81°W – 69°W</td></tr>
+              <tr><td>Gulf of Mexico</td><td>14–16</td><td>99°W – 87°W</td></tr>
+            </tbody>
+          </table>
+        </details>
+      </div>
+
+      <!-- Upload Zone -->
+      <div id="upload-zone" class="drop-zone">
+        <input type="file" id="file-input" accept=".sgy,.segy" hidden>
+        <div class="icon">📂</div>
+        <div class="hint-main">Drop a SEG-Y file here</div>
+        <button class="btn-upload" onclick="document.getElementById('file-input').click()">
+          Browse File
+        </button>
+      </div>
+
+      <!-- Progress -->
+      <div id="progress-wrap">
+        <div id="progress-label">Preparing...</div>
+        <div id="progress-track">
+          <div id="progress-bar"></div>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div id="error-box"></div>
+
+      <!-- Results -->
+      <div id="result-panel">
+
+        <div class="badges" id="badges"></div>
+
+        <div class="section">
+          <div class="section-title">File Info</div>
+          <table class="info-table" id="file-table"></table>
+        </div>
+
+        <div class="section" id="ebcdic-section">
+          <div class="section-title">EBCDIC Metadata</div>
+          <table class="info-table" id="ebcdic-table"></table>
+          <details>
+            <summary>Full EBCDIC Text</summary>
+            <pre id="ebcdic-raw"></pre>
+          </details>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Coordinates</div>
+          <table class="info-table" id="coord-table"></table>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Acquisition</div>
+          <table class="info-table" id="acq-table"></table>
+        </div>
+
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Map ── -->
+  <main id="map-container">
+    <div id="map"></div>
+
+    <div id="map-empty">
+      <div class="empty-icon">🗺️</div>
+      <div class="empty-text">Upload a SEG-Y file to display survey location</div>
+    </div>
+
+    <div id="map-legend" style="display:none">
+      <div class="legend-row">
+        <div class="legend-dot" style="background:#60a5fa"></div>
+        <span>Trace points (sampled)</span>
+      </div>
+      <div class="legend-row">
+        <div class="legend-bbox"></div>
+        <span>Survey bounding box</span>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
