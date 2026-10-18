@@ -102,6 +102,8 @@ Content-Type: application/octet-stream
 <raw SEG-Y bytes>
 ```
 
+For files with more than 1,000 traces, the browser doesn't upload the whole file. It sends a small, valid SEG-Y containing the file headers and the 1,000 evenly spaced traces the parser would sample anyway, and adds `&total_traces=<n>&file_size=<bytes>` so the response still describes the original file. A multi-GB volume therefore uploads only a few MB. The browser falls back to sending the whole file when the layout can't be sliced safely (variable-length traces, little-endian or unknown sample format, trailing bytes).
+
 ## Tests
 
 ```bash
