@@ -125,6 +125,14 @@ class SegyHandler(BaseHTTPRequestHandler):
                 return
             epsg_override = int(raw_epsg)
 
+        # Sent by the browser when the body is a header subset of a larger file
+        try:
+            total_traces = _positive_int_param(params, 'total_traces')
+            original_size = _positive_int_param(params, 'file_size')
+        except ValueError as e:
+            self.send_json(400, {'error': str(e)})
+            return
+
         # Stream to a temp file (segyio needs a path on disk)
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=ext, dir=UPLOAD_DIR)
         try:
@@ -138,8 +146,10 @@ class SegyHandler(BaseHTTPRequestHandler):
                     remaining -= len(chunk)
 
             t0 = time.monotonic()
-            result = _parse_and_classify(tmp_path, filename, region_hint, epsg_override)
+            result = _parse_and_classify(tmp_path, filename, region_hint, epsg_override,
+                                         total_traces, original_size)
             result['parse_time_ms'] = round((time.monotonic() - t0) * 1000)
+            result['uploaded_bytes'] = content_length
 
             self.send_json(200, result)
 
@@ -180,10 +190,30 @@ class SegyHandler(BaseHTTPRequestHandler):
 
 # ── Core pipeline ───────────────────────────────────────────
 
+def _positive_int_param(params: dict, name: str):
+    """Optional positive integer query parameter; None when absent."""
+    raw = params.get(name, '').strip()
+    if not raw:
+        return None
+    if not raw.isdigit() or int(raw) <= 0:
+        raise ValueError(f'Invalid {name}: {raw}')
+    return int(raw)
+
+
 def _parse_and_classify(filepath: str, original_name: str,
-                        region_hint: str = 'auto', epsg_override: int = None) -> dict:
-    """Run the full pipeline and return the complete result."""
+                        region_hint: str = 'auto', epsg_override: int = None,
+                        total_traces: int = None, original_size: int = None) -> dict:
+    """
+    Run the full pipeline and return the complete result.
+    total_traces / original_size describe the original file when filepath is a
+    header subset built by the browser (file headers + sampled traces).
+    """
     raw = parse_segy_file(filepath)
+    if total_traces is not None:
+        if total_traces < raw['total_traces']:
+            raise ValueError(f'total_traces ({total_traces}) is smaller than the '
+                             f'{raw["total_traces"]} traces uploaded')
+        raw['total_traces'] = total_traces
     cls = classify(raw)
 
     ta = raw['trace_arrays']
@@ -235,7 +265,7 @@ def _parse_and_classify(filepath: str, original_name: str,
 
     return {
         'filename':  original_name,
-        'file_size_bytes': os.path.getsize(filepath),
+        'file_size_bytes': original_size or os.path.getsize(filepath),
         'classification': {
             'dimension':   cls['dimension'],
             'stack_type':  cls['stack_type'],
@@ -251,6 +281,7 @@ def _parse_and_classify(filepath: str, original_name: str,
         'trace_stats': {
             'total_traces':    raw['total_traces'],
             'traces_sampled':  raw['sampled_count'],
+            'header_subset':   total_traces is not None,
         },
         'coordinate_info': {
             'coord_source':    coord_source,

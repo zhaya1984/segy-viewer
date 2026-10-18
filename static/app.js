@@ -49,8 +49,45 @@ fileInput.addEventListener('change', e => {
   fileInput.value = '';
 });
 
+// ── Header subset ─────────────────────────────────────────────
+// The server only reads MAX_TRACES evenly spaced trace headers, so for large
+// files we send the file headers plus just those traces as a small, valid SEG-Y.
+const MAX_TRACES = 1000;  // keep in sync with segy_parser.parse_segy_file(max_traces)
+const BYTES_PER_SAMPLE = { 1: 4, 2: 4, 3: 2, 4: 4, 5: 4, 6: 8, 8: 1, 9: 8,
+                           10: 4, 11: 2, 12: 8, 15: 3, 16: 1 };
+
+// Returns { blob, totalTraces }, or null when the whole file should be sent
+// (small file, or a layout we can't slice safely: variable-length traces,
+// little-endian, unknown format, trailing bytes).
+async function buildHeaderSubset(file) {
+  if (file.size < 3600) return null;
+  const bin = new DataView(await file.slice(0, 3600).arrayBuffer());
+  const samples  = bin.getUint16(3220);  // binary header bytes 3221-3222
+  const format   = bin.getUint16(3224);  // bytes 3225-3226
+  const nExtText = bin.getInt16(3504);   // bytes 3505-3506, -1 = variable
+  const bps = BYTES_PER_SAMPLE[format];
+  if (!bps || samples === 0 || nExtText < 0) return null;
+
+  const dataStart = 3600 + nExtText * 3200;
+  const traceLen  = 240 + samples * bps;
+  const dataBytes = file.size - dataStart;
+  if (dataBytes <= 0 || dataBytes % traceLen !== 0) return null;
+
+  const totalTraces = dataBytes / traceLen;
+  if (totalTraces <= MAX_TRACES) return null;
+
+  // Same spacing as np.linspace(0, total - 1, MAX_TRACES).astype(int32)
+  const parts = [file.slice(0, dataStart)];
+  for (let i = 0; i < MAX_TRACES; i++) {
+    const t = Math.floor(i * (totalTraces - 1) / (MAX_TRACES - 1));
+    const start = dataStart + t * traceLen;
+    parts.push(file.slice(start, start + traceLen));
+  }
+  return { blob: new Blob(parts), totalTraces };
+}
+
 // ── Upload ────────────────────────────────────────────────────
-function uploadFile(file) {
+async function uploadFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
   if (!['sgy', 'segy'].includes(ext)) {
     showError(`Unsupported format: .${ext} — please upload a .sgy or .segy file`);
@@ -70,7 +107,19 @@ function uploadFile(file) {
   const params = new URLSearchParams({ filename: file.name, region });
   if (epsgVal) params.set('epsg', epsgVal);
 
-  // The file is sent as the raw request body so the server can stream it to disk
+  let subset = null;
+  try {
+    subset = await buildHeaderSubset(file);
+  } catch (e) {
+    console.warn('Header subset failed, sending the whole file:', e);
+  }
+  if (subset) {
+    params.set('total_traces', subset.totalTraces);
+    params.set('file_size', file.size);
+    showProgress(5, `Uploading headers: ${file.name}`);
+  }
+
+  // The body is sent raw so the server can stream it to disk
   const xhr = new XMLHttpRequest();
   xhr.open('POST', `/api/upload?${params}`);
   xhr.setRequestHeader('Content-Type', 'application/octet-stream');
@@ -101,7 +150,7 @@ function uploadFile(file) {
   xhr.onerror   = () => { hideProgress(); showError('Network error — is the server running?'); };
   xhr.ontimeout = () => { hideProgress(); showError('Request timed out'); };
   xhr.timeout   = 300_000;
-  xhr.send(file);
+  xhr.send(subset ? subset.blob : file);
 }
 
 // ── Render results ────────────────────────────────────────────
@@ -130,6 +179,9 @@ function renderResult(data) {
   renderTable('file-table', [
     ['Filename',      data.filename],
     ['File size',     formatBytes(data.file_size_bytes)],
+    ['Uploaded',      ts.header_subset
+                        ? `${formatBytes(data.uploaded_bytes)} (headers + sampled traces)`
+                        : `${formatBytes(data.uploaded_bytes)} (whole file)`],
     ['Total traces',  ts.total_traces.toLocaleString()],
     ['Traces read',   `${ts.traces_sampled.toLocaleString()} (uniform sample)`],
     ['Sample interval', `${bh.sample_interval_us} μs`],
